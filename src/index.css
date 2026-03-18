@@ -1,0 +1,140 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* CricketX Dark Theme */
+    --background: 222 47% 7%;
+    --foreground: 210 40% 96%;
+
+    --card: 222 40% 10%;
+    --card-foreground: 210 40% 96%;
+
+    --popover: 222 40% 10%;
+    --popover-foreground: 210 40% 96%;
+
+    /* Gold primary */
+    --primary: 43 96% 50%;
+    --primary-foreground: 222 47% 7%;
+
+    --secondary: 222 35% 16%;
+    --secondary-foreground: 210 40% 96%;
+
+    --muted: 222 35% 14%;
+    --muted-foreground: 215 20% 55%;
+
+    --accent: 222 35% 18%;
+    --accent-foreground: 210 40% 96%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 222 30% 18%;
+    --input: 222 35% 14%;
+    --ring: 43 96% 50%;
+
+    --radius: 0.5rem;
+
+    /* Custom brand tokens */
+    --brand-gold: 43 96% 50%;
+    --brand-navy: 222 47% 7%;
+    --brand-navy-mid: 222 40% 12%;
+    --brand-navy-light: 222 35% 16%;
+    --brand-back: 213 90% 55%;
+    --brand-lay: 340 85% 58%;
+    --brand-live: 142 76% 42%;
+    --brand-win: 142 76% 42%;
+    --brand-loss: 0 84% 60%;
+
+    --sidebar-background: 222 47% 6%;
+    --sidebar-foreground: 210 40% 80%;
+    --sidebar-primary: 43 96% 50%;
+    --sidebar-primary-foreground: 222 47% 7%;
+    --sidebar-accent: 222 35% 14%;
+    --sidebar-accent-foreground: 210 40% 96%;
+    --sidebar-border: 222 30% 14%;
+    --sidebar-ring: 43 96% 50%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', sans-serif;
+  }
+  h1, h2, h3 {
+    font-family: 'Barlow Condensed', sans-serif;
+    letter-spacing: 0.02em;
+  }
+}
+
+@layer utilities {
+  .back-btn {
+    background-color: hsl(213, 90%, 55%);
+    color: white;
+  }
+  .back-btn:hover {
+    background-color: hsl(213, 90%, 48%);
+  }
+  .lay-btn {
+    background-color: hsl(340, 85%, 58%);
+    color: white;
+  }
+  .lay-btn:hover {
+    background-color: hsl(340, 85%, 50%);
+  }
+  .live-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: hsl(142, 76%, 42%);
+    animation: pulse-live 1.5s infinite;
+  }
+  @keyframes pulse-live {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.6; transform: scale(1.3); }
+  }
+  .gold-gradient {
+    background: linear-gradient(135deg, hsl(43, 96%, 50%) 0%, hsl(36, 100%, 45%) 100%);
+  }
+  .navy-gradient {
+    background: linear-gradient(180deg, hsl(222, 47%, 9%) 0%, hsl(222, 47%, 5%) 100%);
+  }
+  .card-glass {
+    background: hsl(222, 40%, 10%);
+    border: 1px solid hsl(222, 30%, 18%);
+    backdrop-filter: blur(12px);
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .odds-cell {
+    min-width: 64px;
+    height: 44px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .odds-cell:hover {
+    transform: scale(1.05);
+    filter: brightness(1.15);
+  }
+  .bet-slip-row {
+    border-left: 3px solid hsl(43, 96%, 50%);
+  }
+  .bet-slip-row-lay {
+    border-left: 3px solid hsl(340, 85%, 58%);
+  }
+}
