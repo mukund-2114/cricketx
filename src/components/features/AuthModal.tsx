@@ -32,61 +32,75 @@ export default function AuthModal({ onClose }: AuthModalProps) {
   // ─── Login ───────────────────────────────────────────────
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!loginEmail || !loginPw) { toast.error('Fill in all fields'); return; }
+    // Use target values directly to avoid stale state from password managers
+    const form = e.target as HTMLFormElement;
+    const email = (form.elements.namedItem('email') as HTMLInputElement)?.value || loginEmail;
+    const pw = (form.elements.namedItem('password') as HTMLInputElement)?.value || loginPw;
+
+    if (!email || !pw) { 
+      toast.error('Fill in all fields'); 
+      return; 
+    }
+
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email: loginEmail, password: loginPw });
-    setLoading(false);
-    if (error) {
-      toast.error(error.message === 'Invalid login credentials' ? 'Incorrect email or password' : error.message);
-    } else {
-      toast.success('Welcome back!');
-      onClose();
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ 
+        email: email, 
+        password: pw 
+      });
+      
+      if (error) {
+        toast.error(error.message === 'Invalid login credentials' ? 'Incorrect email or password' : error.message);
+      } else {
+        toast.success('Welcome back!');
+        onClose();
+      }
+    } catch (err) {
+      console.error('[Auth] Login exception:', err);
+      toast.error('An unexpected error occurred. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
   // ─── Register ────────────────────────────────────────────
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!regName || !regEmail || !regPhone || !regPassword) { toast.error('Fill in all fields'); return; }
-    if (regPassword !== regConfirmPw) { toast.error('Passwords do not match'); return; }
-    if (regPassword.length < 8) { toast.error('Password must be at least 8 characters'); return; }
+    const form = e.target as HTMLFormElement;
+    const name = (form.elements.namedItem('regName') as HTMLInputElement)?.value || regName;
+    const email = (form.elements.namedItem('regEmail') as HTMLInputElement)?.value || regEmail;
+    const phone = (form.elements.namedItem('regPhone') as HTMLInputElement)?.value || regPhone;
+    const password = (form.elements.namedItem('regPassword') as HTMLInputElement)?.value || regPassword;
+    const confirm = (form.elements.namedItem('regConfirmPw') as HTMLInputElement)?.value || regConfirmPw;
+
+    if (!name || !email || !phone || !password) { toast.error('Fill in all fields'); return; }
+    if (password !== confirm) { toast.error('Passwords do not match'); return; }
+    if (password.length < 8) { toast.error('Password must be at least 8 characters'); return; }
     if (!agreed) { toast.error('Please agree to the terms'); return; }
 
     setLoading(true);
     try {
-      // Step 1: Create user via Edge Function (auto-confirms email, no verification needed)
       const { data: fnData, error: fnError } = await supabase.functions.invoke('auth-signup', {
-        body: { email: regEmail, password: regPassword, name: regName, phone: regPhone, currency: regCurrency },
+        body: { email, password, name, phone, currency: regCurrency },
       });
 
-      if (fnError) {
-        // Try to get detailed error message
-        let msg = fnError.message;
-        try {
-          const { FunctionsHttpError } = await import('@supabase/supabase-js');
-          if (fnError instanceof FunctionsHttpError) {
-            const text = await fnError.context?.text();
-            msg = text || msg;
-          }
-        } catch { /* ignore */ }
-        throw new Error(msg);
-      }
-
+      if (fnError) throw fnError;
       if (fnData?.error) throw new Error(fnData.error);
 
-      // Step 2: Sign in immediately — no email confirmation required
+      // Sign in immediately
       const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: regEmail,
-        password: regPassword,
+        email,
+        password,
       });
 
       if (signInError) throw signInError;
 
       toast.success('Account created! 1,000 bonus points added.');
       onClose();
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to create account';
-      toast.error(message);
+    } catch (err: any) {
+      console.error('[Auth] Registration error:', err);
+      toast.error(err.message || 'Failed to create account');
+    } finally {
       setLoading(false);
     }
   };
@@ -141,7 +155,7 @@ export default function AuthModal({ onClose }: AuthModalProps) {
                 <label className="block text-xs font-medium text-[hsl(var(--muted-foreground))] mb-1">Email Address</label>
                 <div className="relative">
                   <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))]" />
-                  <input type="email" value={loginEmail} onChange={e => setLoginEmail(e.target.value)}
+                  <input type="email" name="email" value={loginEmail} onChange={e => setLoginEmail(e.target.value)}
                     placeholder="you@example.com" className={`${inputClass} pl-9`} autoFocus />
                 </div>
               </div>
@@ -149,7 +163,7 @@ export default function AuthModal({ onClose }: AuthModalProps) {
                 <label className="block text-xs font-medium text-[hsl(var(--muted-foreground))] mb-1">Password</label>
                 <div className="relative">
                   <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))]" />
-                  <input type={showPw ? 'text' : 'password'} value={loginPw} onChange={e => setLoginPw(e.target.value)}
+                  <input type={showPw ? 'text' : 'password'} name="password" value={loginPw} onChange={e => setLoginPw(e.target.value)}
                     placeholder="••••••••" className={`${inputClass} pl-9 pr-10`} />
                   <button type="button" onClick={() => setShowPw(!showPw)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))] hover:text-white">
@@ -186,7 +200,7 @@ export default function AuthModal({ onClose }: AuthModalProps) {
                   <label className="block text-xs font-medium text-[hsl(var(--muted-foreground))] mb-1">Full Name</label>
                   <div className="relative">
                     <UserIcon size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))]" />
-                    <input value={regName} onChange={e => setRegName(e.target.value)} placeholder="John Doe"
+                    <input name="regName" value={regName} onChange={e => setRegName(e.target.value)} placeholder="John Doe"
                       className={`${inputClass} pl-8`} autoFocus />
                   </div>
                 </div>
@@ -194,7 +208,7 @@ export default function AuthModal({ onClose }: AuthModalProps) {
                   <label className="block text-xs font-medium text-[hsl(var(--muted-foreground))] mb-1">Phone</label>
                   <div className="relative">
                     <Phone size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))]" />
-                    <input value={regPhone} onChange={e => setRegPhone(e.target.value)} placeholder="+1 xxx xxxx"
+                    <input name="regPhone" value={regPhone} onChange={e => setRegPhone(e.target.value)} placeholder="+1 xxx xxxx"
                       className={`${inputClass} pl-8`} />
                   </div>
                 </div>
@@ -204,7 +218,7 @@ export default function AuthModal({ onClose }: AuthModalProps) {
                 <label className="block text-xs font-medium text-[hsl(var(--muted-foreground))] mb-1">Email Address</label>
                 <div className="relative">
                   <Mail size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))]" />
-                  <input type="email" value={regEmail} onChange={e => setRegEmail(e.target.value)}
+                  <input type="email" name="regEmail" value={regEmail} onChange={e => setRegEmail(e.target.value)}
                     placeholder="you@example.com" className={`${inputClass} pl-8`} />
                 </div>
               </div>
@@ -223,7 +237,7 @@ export default function AuthModal({ onClose }: AuthModalProps) {
                   <label className="block text-xs font-medium text-[hsl(var(--muted-foreground))] mb-1">Password</label>
                   <div className="relative">
                     <Lock size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))]" />
-                    <input type={showPw ? 'text' : 'password'} value={regPassword} onChange={e => setRegPassword(e.target.value)}
+                    <input type={showPw ? 'text' : 'password'} name="regPassword" value={regPassword} onChange={e => setRegPassword(e.target.value)}
                       placeholder="Min 8 chars" className={`${inputClass} pl-8 pr-8`} />
                     <button type="button" onClick={() => setShowPw(!showPw)}
                       className="absolute right-2 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))] hover:text-white">
@@ -234,7 +248,7 @@ export default function AuthModal({ onClose }: AuthModalProps) {
                 <div>
                   <label className="block text-xs font-medium text-[hsl(var(--muted-foreground))] mb-1">Confirm</label>
                   <div className="relative">
-                    <input type={showConfirmPw ? 'text' : 'password'} value={regConfirmPw} onChange={e => setRegConfirmPw(e.target.value)}
+                    <input type={showConfirmPw ? 'text' : 'password'} name="regConfirmPw" value={regConfirmPw} onChange={e => setRegConfirmPw(e.target.value)}
                       placeholder="Repeat" className={`${inputClass} pr-8`} />
                     <button type="button" onClick={() => setShowConfirmPw(!showConfirmPw)}
                       className="absolute right-2 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))] hover:text-white">

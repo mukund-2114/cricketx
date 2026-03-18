@@ -47,7 +47,7 @@ export default function MatchDetail({ onAuthRequired }: MatchDetailProps) {
         startTime: data.start_time,
         status: data.status,
         score: data.score,
-        sport: data.sport,
+        sport: data.sport as 'cricket' | 'football' | 'tennis',
         markets: [],
       });
     }
@@ -160,7 +160,10 @@ export default function MatchDetail({ onAuthRequired }: MatchDetailProps) {
               {match.homeTeam} <span className="text-[hsl(var(--muted-foreground))]">vs</span> {match.awayTeam}
             </h1>
             <div className="flex items-center gap-3 mt-1 text-xs text-[hsl(var(--muted-foreground))]">
-              <span className="flex items-center gap-1"><MapPin size={11} />{match.venue}</span>
+              <span className="flex items-center gap-1">
+                {match.sport === 'cricket' ? '🏏' : match.sport === 'football' ? '⚽' : '🎾'}
+                {match.venue}
+              </span>
               <span className="flex items-center gap-1"><Clock size={11} />{formatDateTime(match.startTime)}</span>
             </div>
           </div>
@@ -176,8 +179,8 @@ export default function MatchDetail({ onAuthRequired }: MatchDetailProps) {
               <RefreshCw size={14} className={polling ? 'animate-spin' : ''} />
             </button>
 
-            {match.status === 'live' && match.score && (
-              <div className="card-glass rounded-xl px-5 py-3 min-w-[220px]">
+            {match.status === 'live' && match.score && match.sport === 'cricket' && (
+              <div className="card-glass rounded-xl px-4 py-3 min-w-[200px] border-l-4 border-l-[hsl(var(--brand-gold))]">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-xs font-bold text-white">{match.homeTeam.split(' ').pop()}</span>
                   <span className="text-lg font-extrabold text-[hsl(var(--brand-gold))]">
@@ -185,10 +188,20 @@ export default function MatchDetail({ onAuthRequired }: MatchDetailProps) {
                   </span>
                   <span className="text-xs text-[hsl(var(--muted-foreground))]">({match.score.homeOvers})</span>
                 </div>
-                <div className="text-xs text-[hsl(var(--muted-foreground))] space-y-0.5">
-                  <div>{match.score.currentBatsman1} | {match.score.currentBatsman2}</div>
-                  <div>Bowling: {match.score.currentBowler}</div>
-                  <div className="text-[hsl(var(--brand-gold))] font-semibold">CRR: {match.score.currRunRate}</div>
+                <div className="text-[10px] text-[hsl(var(--muted-foreground))] space-y-0.5">
+                  <div className="truncate">{match.score.currentBatsman1}*</div>
+                  <div className="truncate">{match.score.currentBowler}</div>
+                </div>
+              </div>
+            )}
+
+            {match.status === 'live' && match.sport !== 'cricket' && (
+              <div className="card-glass rounded-xl px-4 py-3 min-w-[150px] flex items-center justify-center border-l-4 border-l-[hsl(var(--brand-gold))]">
+                <div className="text-center">
+                  <div className="text-xs font-bold text-[hsl(var(--muted-foreground))] uppercase mb-1">Live Score</div>
+                  <div className="text-xl font-black text-white tracking-widest">
+                    {match.score?.homeRuns ?? 0} — {match.score?.awayRuns ?? 0}
+                  </div>
                 </div>
               </div>
             )}

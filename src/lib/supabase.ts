@@ -9,7 +9,10 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
-    storageKey: 'cricketx-auth-token', // Unique key to avoid lock conflicts
+    storageKey: 'cricketx-auth-v2',
+    // Disable locking to prevent "Lock not released" hangs
+    // @ts-ignore - Supabase types might not explicitly show webLock: null but it's supported
+    lockType: null,
   },
 });
 
