@@ -19,30 +19,30 @@ export function useAuth() {
   useEffect(() => {
     let mounted = true;
 
-    // Safety timeout: if auth takes more than 7s, stop loading anyway
+    // Safety timeout: if auth takes more than 5s, stop loading anyway
     const safetyTimeout = setTimeout(() => {
       if (mounted && loading) {
-        console.warn('Auth initialization timed out, clearing loading state');
+        console.warn('[Auth] Initialization timed out (5s), clearing loading state');
         setLoading(false);
       }
-    }, 7000);
+    }, 5000);
 
-    // Safety #1: Check existing session
+    // Initial session attempt
     supabase.auth.getSession()
       .then(async ({ data: { session }, error }) => {
-        if (error) console.error('Supabase session error:', error);
+        if (error) console.error('[Auth] getSession error:', error.message);
         
         if (mounted && session?.user) {
           try {
             const profile = await fetchProfile(session.user.id);
             if (mounted) setUser(profile);
           } catch (err) {
-            console.error('Profile fetch error:', err);
+            console.error('[Auth] Initial profile fetch error:', err);
           }
         }
       })
       .catch(err => {
-        console.error('getSession exception:', err);
+        console.error('[Auth] getSession exception:', err);
       })
       .finally(() => {
         if (mounted) {
@@ -51,13 +51,18 @@ export function useAuth() {
         }
       });
 
-    // Safety #2: Listen to auth state changes
+    // Listen to auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('[Auth] Event:', event);
       if (!mounted) return;
 
-      if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') && session?.user) {
-        const profile = await fetchProfile(session.user.id);
-        if (mounted) setUser(profile);
+      if ((event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') && session?.user) {
+        try {
+          const profile = await fetchProfile(session.user.id);
+          if (mounted) setUser(profile);
+        } catch (err) {
+          console.error("[Auth] fetchProfile error on auth state change:", err);
+        }
       } else if (event === 'SIGNED_OUT') {
         setUser(null);
       }

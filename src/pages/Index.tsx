@@ -71,21 +71,25 @@ export default function Index({ onAuthRequired }: IndexProps) {
       } else if (!matchesRes.data || matchesRes.data.length === 0) {
         // No matches in DB — auto-seed demo IPL data
         setSeeding(true);
-        const { error } = await supabase.functions.invoke('live-sync', {
-          body: { mode: 'seed_demo' },
-        });
-        setSeeding(false);
-        if (!error) {
-          // Re-fetch after seeding
-          const [m2, mk2] = await Promise.all([
-            supabase.from('matches').select('*').order('start_time', { ascending: true }),
-            supabase.from('markets').select('*').eq('status', 'open'),
-          ]);
-          if (m2.data && mk2.data) {
-            setMatches(m2.data.map((m) =>
-              mapDbToMatch(m as Record<string, unknown>, mk2.data as Record<string, unknown>[])
-            ));
-          }
+        try {
+          await supabase.functions.invoke('live-sync', {
+            body: { mode: 'seed_demo' },
+          });
+        } catch (err) {
+          console.error('[Seeding] Error:', err);
+        } finally {
+          setSeeding(false);
+        }
+        
+        // Re-fetch after seeding (regardless of success, to show what we have)
+        const [m2, mk2] = await Promise.all([
+          supabase.from('matches').select('*').order('start_time', { ascending: true }),
+          supabase.from('markets').select('*').eq('status', 'open'),
+        ]);
+        if (m2.data && mk2.data) {
+          setMatches(m2.data.map((m) =>
+            mapDbToMatch(m as Record<string, unknown>, mk2.data as Record<string, unknown>[])
+          ));
         }
       }
     };

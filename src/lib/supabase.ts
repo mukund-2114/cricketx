@@ -9,16 +9,18 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
+    storageKey: 'cricketx-auth-token', // Unique key to avoid lock conflicts
   },
 });
 
 // Map Supabase auth user + profile to our User type
 export function mapProfileToUser(profile: Record<string, unknown>): User {
+  const email = (profile.email as string) || '';
   return {
     id: profile.id as string,
-    email: profile.email as string,
+    email: email,
     phone: (profile.phone as string) || '',
-    name: (profile.name as string) || '',
+    name: (profile.name as string) || email.split('@')[0] || 'User',
     role: (profile.role as 'user' | 'admin') || 'user',
     pointsBalance: Number(profile.points_balance) || 0,
     currency: (profile.currency as 'CAD' | 'USD' | 'INR') || 'CAD',
