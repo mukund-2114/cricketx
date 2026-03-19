@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
 import type { User } from '../types';
-import { supabase, mapProfileToUser } from '../lib/supabase';
+import { mapProfileToUser } from '../lib/supabase';
 
 interface AuthContextType {
   user: User | null;
@@ -10,124 +10,104 @@ interface AuthContextType {
   updateBalance: (newBalance: number) => Promise<void>;
   setUser: React.Dispatch<React.SetStateAction<User | null>>;
   setLoading: React.Dispatch<React.SetStateAction<boolean>>;
+  login: (email: string, pass: string) => Promise<User | null>;
+  signup: (email: string, pass: string, name: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const BACKEND_URL = 'http://localhost:3001/api';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  // Synchronous recovery for instant UI response
+  const [user, setUser] = useState<User | null>(() => {
+    const cached = localStorage.getItem('cricketx_user_proxy_v8');
+    try { return cached ? JSON.parse(cached) : null; } catch { return null; }
+  });
   const [loading, setLoading] = useState(true);
 
-  const fetchProfile = useCallback(async (userId: string): Promise<User | null> => {
+  // Persistence side-effect
+  useEffect(() => {
+    if (user) localStorage.setItem('cricketx_user_proxy_v8', JSON.stringify(user));
+    else localStorage.removeItem('cricketx_user_proxy_v8');
+  }, [user]);
+
+  const initializedRef = useRef(false);
+
+  useEffect(() => {
+    if (initializedRef.current) return;
+    initializedRef.current = true;
+    
+    // Check if we have a session stored (Simplified Auth Strategy)
+    const session = localStorage.getItem('cricketx_session_v8');
+    if (session) {
+       // We're good, our synchronous state already loaded from cache
+       console.log('[Auth] Session restored from Express proxy.');
+    }
+    setLoading(false);
+  }, []);
+
+  const login = useCallback(async (email: string, pass: string) => {
+    setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
-      if (error || !data) return null;
-      return mapProfileToUser(data);
+      const resp = await fetch(`${BACKEND_URL}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password: pass })
+      });
+      const data = await resp.json();
+      if (!data.success) throw new Error(data.error || 'Login failed');
+
+      const mapped = mapProfileToUser(data.user);
+      setUser(mapped);
+      localStorage.setItem('cricketx_session_v8', JSON.stringify(data.session));
+      return mapped;
     } catch (e) {
-      console.error('[Auth] fetchProfile exception:', e);
-      return null;
+      console.error('[Auth] Login error:', e);
+      throw e;
+    } finally {
+      setLoading(false);
     }
   }, []);
 
-  useEffect(() => {
-    let mounted = true;
-
-    // Safety timeout: if auth takes more than 15s, stop loading anyway
-    const safetyTimeout = setTimeout(() => {
-      if (mounted && loading) {
-        console.warn('[Auth] Initialization timed out (15s), clearing loading state');
-        setLoading(false);
-      }
-    }, 15000);
-
-    // Global Auth state listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('[Auth] Global Event:', event, !!session?.user);
-      if (!mounted) return;
-
-      if (session?.user) {
-        try {
-          const profile = await fetchProfile(session.user.id);
-          if (mounted) {
-            if (profile) {
-              setUser(profile);
-            } else {
-              // Fallback
-              setUser({
-                id: session.user.id,
-                email: session.user.email || '',
-                name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'User',
-                pointsBalance: 0,
-                role: 'user',
-                createdAt: session.user.created_at,
-                phone: session.user.user_metadata?.phone || '',
-                currency: 'INR',
-                isVerified: true,
-                isActive: true,
-                totalDeposited: 0,
-                totalWithdrawn: 0,
-                kycStatus: 'pending'
-              });
-            }
-          }
-        } catch (err) {
-          console.error("[Auth] profile fetch error:", err);
-        }
-      } else {
-        setUser(null);
-      }
+  const signup = useCallback(async (email: string, pass: string, name: string) => {
+    setLoading(true);
+    try {
+      const resp = await fetch(`${BACKEND_URL}/auth/signup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password: pass, name })
+      });
+      const data = await resp.json();
+      if (!data.success) throw new Error(data.error || 'Signup failed');
       
-      // Always clear loading on ANY event (don't wait for profile to finish if it's slow)
-      if (mounted) setLoading(false);
-    });
-
-    // Initial check (Parallel recovery attempt)
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (!mounted) return;
-      if (session?.user) {
-        const profile = await fetchProfile(session.user.id);
-        if (mounted) {
-          if (profile) setUser(profile);
-          // If no profile yet, but session exists, the listener above will handle fallback
-        }
-      }
-      if (mounted) {
-        setLoading(false);
-        clearTimeout(safetyTimeout);
-      }
-    });
-
-    return () => {
-      mounted = false;
-      subscription.unsubscribe();
-      clearTimeout(safetyTimeout);
-    };
-  }, [fetchProfile]);
+      // Implicit login after signup
+      await login(email, pass);
+    } catch (e) {
+      console.error('[Auth] Signup error:', e);
+      throw e;
+    } finally {
+      setLoading(false);
+    }
+  }, [login]);
 
   const signOut = useCallback(async () => {
-    await supabase.auth.signOut();
+    localStorage.removeItem('cricketx_session_v8');
     setUser(null);
   }, []);
 
   const refreshUser = useCallback(async () => {
-    if (!user) return null;
-    const profile = await fetchProfile(user.id);
-    if (profile) setUser(profile);
-    return profile;
-  }, [user, fetchProfile]);
+    // In Proxy mode, refresh logic can be expanded here to fetch from /api/auth/me
+    return user;
+  }, [user]);
 
   const updateBalance = useCallback(async (newBalance: number) => {
     if (!user) return;
     setUser(prev => prev ? { ...prev, pointsBalance: newBalance } : null);
-    await supabase.from('profiles').update({ points_balance: newBalance }).eq('id', user.id);
+    // Send to backend...
   }, [user]);
 
   return (
-    <AuthContext.Provider value={{ user, loading, signOut, refreshUser, updateBalance, setUser, setLoading }}>
+    <AuthContext.Provider value={{ user, loading, signOut, refreshUser, updateBalance, setUser, setLoading, login, signup }}>
       {children}
     </AuthContext.Provider>
   );

@@ -25,7 +25,7 @@ function AppContent() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
-    document.title = 'CricketX Exchange — IPL Betting';
+    document.title = 'Elite Exchange — Global Sports Betting';
   }, []);
 
   if (loading) {
@@ -35,7 +35,7 @@ function AppContent() {
           <div className="w-12 h-12 gold-gradient rounded-xl flex items-center justify-center mx-auto mb-3 animate-pulse">
             <span className="text-xl font-extrabold text-[hsl(var(--brand-navy))]">X</span>
           </div>
-          <p className="text-[hsl(var(--muted-foreground))] text-sm">Loading CricketX...</p>
+          <p className="text-[hsl(var(--muted-foreground))] text-sm">Initializing Elite Exchange...</p>
         </div>
       </div>
     );

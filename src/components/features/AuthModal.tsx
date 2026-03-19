@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { X, Eye, EyeOff, Trophy, Mail, Lock, User as UserIcon, Phone } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Currency } from '@/types';
-import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/hooks/useAuth';
 
 interface AuthModalProps {
   onClose: () => void;
@@ -28,6 +28,7 @@ export default function AuthModal({ onClose }: AuthModalProps) {
   const [regPassword, setRegPassword] = useState('');
   const [regConfirmPw, setRegConfirmPw] = useState('');
   const [agreed, setAgreed] = useState(false);
+  const { login, register } = useAuth();
 
   // ─── Login ───────────────────────────────────────────────
   const handleLogin = async (e: React.FormEvent) => {
@@ -44,20 +45,12 @@ export default function AuthModal({ onClose }: AuthModalProps) {
 
     setLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithPassword({ 
-        email: email, 
-        password: pw 
-      });
-      
-      if (error) {
-        toast.error(error.message === 'Invalid login credentials' ? 'Incorrect email or password' : error.message);
-      } else {
-        toast.success('Welcome back!');
-        onClose();
-      }
-    } catch (err) {
+      await login(email, pw);
+      toast.success('Welcome back!');
+      onClose();
+    } catch (err: any) {
       console.error('[Auth] Login exception:', err);
-      toast.error('An unexpected error occurred. Please try again.');
+      toast.error(err.message || 'Incorrect email or password');
     } finally {
       setLoading(false);
     }
@@ -80,21 +73,7 @@ export default function AuthModal({ onClose }: AuthModalProps) {
 
     setLoading(true);
     try {
-      const { data: fnData, error: fnError } = await supabase.functions.invoke('auth-signup', {
-        body: { email, password, name, phone, currency: regCurrency },
-      });
-
-      if (fnError) throw fnError;
-      if (fnData?.error) throw new Error(fnData.error);
-
-      // Sign in immediately
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (signInError) throw signInError;
-
+      await register({ email, password, name, phone, currency: regCurrency });
       toast.success('Account created! 1,000 bonus points added.');
       onClose();
     } catch (err: any) {

@@ -1,18 +1,30 @@
 import { useCallback } from 'react';
 import { useAuthContext } from '../context/AuthContext';
-import { supabase } from '../lib/supabase';
 
 export function useAuth() {
-  const { user, loading, signOut: contextSignOut, refreshUser, updateBalance, setUser, setLoading } = useAuthContext();
+  const { 
+    user, 
+    loading, 
+    signOut: contextSignOut, 
+    refreshUser, 
+    updateBalance, 
+    setUser, 
+    setLoading,
+    login: apiLogin,
+    signup: apiSignup
+  } = useAuthContext();
 
   const signOut = useCallback(async () => {
-    await supabase.auth.signOut();
-    setUser(null);
-  }, [setUser]);
+    await contextSignOut();
+  }, [contextSignOut]);
 
-  // Keep these as no-ops for backward compat with form handlers
-  const login = useCallback((_email: string, _password: string) => null, []);
-  const register = useCallback((_data: unknown) => {}, []);
+  const login = useCallback(async (email: string, pass: string) => {
+    return await apiLogin(email, pass);
+  }, [apiLogin]);
+
+  const register = useCallback(async (data: any) => {
+    return await apiSignup(data.email, data.password, data.name);
+  }, [apiSignup]);
 
   return { 
     user, 

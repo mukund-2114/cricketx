@@ -28,16 +28,15 @@ export default function MatchDetail({ onAuthRequired }: MatchDetailProps) {
   // ── Live markets via Realtime + polling ──────────────────────────
   const { markets, loading: loadingMarkets, lastUpdated, polling, refresh } = useLiveMarkets(id);
 
-  // ── Fetch match metadata ─────────────────────────────────────────
+  // ── Fetch detailed match data from Express ───────────────────────
   const fetchMatch = useCallback(async () => {
     if (!id) return;
-    const { data } = await supabase
-      .from('matches')
-      .select('*')
-      .eq('id', id)
-      .single();
-
-    if (data) {
+    try {
+      setLoadingMatch(true);
+      const res = await fetch(`http://localhost:3001/api/matches/${id}`);
+      if (!res.ok) throw new Error('Match not found');
+      const data = await res.json();
+      
       setMatch({
         id: data.id,
         series: data.series,
@@ -48,52 +47,26 @@ export default function MatchDetail({ onAuthRequired }: MatchDetailProps) {
         status: data.status,
         score: data.score,
         sport: data.sport as 'cricket' | 'football' | 'tennis',
-        markets: [],
+        markets: data.markets || [],
       });
+    } catch (err) {
+      console.error('[Detail] Error fetching match:', err);
+      toast.error('Failed to load live match data');
+    } finally {
+      setLoadingMatch(false);
     }
-    setLoadingMatch(false);
   }, [id]);
 
   useEffect(() => {
     fetchMatch();
-
-    // Realtime subscription for match metadata (score, status)
-    if (!id) return;
-    const channel = supabase
-      .channel(`match-meta-${id}`)
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'matches', filter: `id=eq.${id}` },
-        (payload) => {
-          const d = payload.new as Record<string, unknown>;
-          setMatch(prev => prev ? {
-            ...prev,
-            status: d.status as 'upcoming' | 'live' | 'completed',
-            score: d.score as Match['score'],
-            venue: d.venue as string,
-          } : prev);
-        }
-      )
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
+    // Auto-refresh match data every 60 seconds for live odds
+    const interval = setInterval(fetchMatch, 60000);
+    return () => clearInterval(interval);
   }, [id, fetchMatch]);
-
-  // ── Seed demo data if no match found ────────────────────────────
-  const handleSeedDemo = async () => {
-    setSeeding(true);
-    const { data, error } = await supabase.functions.invoke('live-sync', {
-      body: { mode: 'seed_demo' },
-    });
-    setSeeding(false);
-    if (error) { toast.error('Failed to seed demo data'); return; }
-    toast.success(`Seeded ${data?.inserted ?? 0} demo IPL matches`);
-    navigate('/');
-  };
 
   const handleOddsClick = (item: BetSlipItem) => addToBetSlip(item);
 
-  const loading = loadingMatch || loadingMarkets;
+  const loading = loadingMatch;
 
   if (loading) {
     return (
@@ -113,11 +86,16 @@ export default function MatchDetail({ onAuthRequired }: MatchDetailProps) {
           <div className="text-4xl">🏏</div>
           <p className="text-[hsl(var(--muted-foreground))]">Match not found</p>
           <button
-            onClick={handleSeedDemo}
+            onClick={() => {
+              setSeeding(true);
+              fetch('http://localhost:3001/api/sync/force', { method: 'POST' })
+                .then(() => navigate('/'))
+                .finally(() => setSeeding(false));
+            }}
             disabled={seeding}
             className="gold-gradient text-[hsl(var(--brand-navy))] px-4 py-2 rounded-lg text-sm font-bold hover:opacity-90 transition-opacity disabled:opacity-60"
           >
-            {seeding ? 'Seeding...' : 'Load Demo Matches'}
+            {seeding ? 'Syncing...' : 'Fetch Live Data'}
           </button>
           <br />
           <button onClick={() => navigate('/')} className="text-[hsl(var(--brand-gold))] hover:underline text-sm">

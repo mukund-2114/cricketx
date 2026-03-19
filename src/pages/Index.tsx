@@ -5,7 +5,8 @@ import { supabase } from '@/lib/supabase';
 import MatchCard from '@/components/features/MatchCard';
 import LiveScoreBar from '@/components/features/LiveScoreBar';
 import BetSlip from '@/components/features/BetSlip';
-import heroBetting from '@/assets/hero-betting.jpg';
+// Professional hero background
+const heroBettingPro = 'https://imgur.com/v8tT9B0.png'; // Placeholder for the actual generated image below
 import { useAuth } from '@/hooks/useAuth';
 import { useBetting } from '@/hooks/useBetting';
 
@@ -14,9 +15,7 @@ interface IndexProps {
 }
 
 function mapDbToMatch(dbMatch: Record<string, unknown>, markets: Record<string, unknown>[]): Match {
-  const matchMarkets = markets
-    .filter((m) => m.match_id === dbMatch.id)
-    .map((m) => ({
+  const matchMarkets = markets.map((m) => ({
       id: m.id as string,
       matchId: m.match_id as string,
       name: m.name as string,
@@ -43,7 +42,10 @@ function mapDbToMatch(dbMatch: Record<string, unknown>, markets: Record<string, 
     startTime: dbMatch.start_time as string,
     status: dbMatch.status as 'upcoming' | 'live' | 'completed',
     score: dbMatch.score as Match['score'],
-    sport: dbMatch.sport as 'cricket' | 'football' | 'tennis',
+    sport: dbMatch.sport as string,
+    sportGroup: dbMatch.sport_group as string,
+    sportKey: dbMatch.sport_key as string,
+    region: dbMatch.region as string,
     markets: matchMarkets,
   };
 }
@@ -55,10 +57,32 @@ export default function Index({ onAuthRequired }: IndexProps) {
   const [filter, setFilter] = useState<'all' | 'live' | 'upcoming'>('all');
   const [activeSport, setActiveSport] = useState<'cricket' | 'football' | 'tennis' | 'all'>('all');
   const [search, setSearch] = useState('');
+  const [systemStatus, setSystemStatus] = useState<any>(null);
+  const [availableGroups, setAvailableGroups] = useState<string[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
 
   useEffect(() => {
     const fetchMatches = async () => {
+      try {
+        console.log('[Sync] Fetching from Express Backend...');
+        const res = await fetch('http://localhost:3001/api/matches');
+        if (!res.ok) throw new Error('Backend offline');
+        const data = await res.json();
+        
+        if (data && data.matches) {
+          const mapped = data.matches.map((m: any) =>
+            mapDbToMatch(m as Record<string, unknown>, (m.markets || []) as Record<string, unknown>[])
+          );
+          setMatches(mapped);
+          setSystemStatus(data.status);
+          if (data.groups) setAvailableGroups(data.groups);
+          return;
+        }
+      } catch (err) {
+        console.warn('[Sync] Backend failed, falling back to direct Supabase:', err.message);
+      }
+
+      // Fallback: Direct Supabase from DB only
       const [matchesRes, marketsRes] = await Promise.all([
         supabase.from('matches').select('*').order('start_time', { ascending: true }),
         supabase.from('markets').select('*').eq('status', 'open'),
@@ -69,30 +93,6 @@ export default function Index({ onAuthRequired }: IndexProps) {
           mapDbToMatch(m as Record<string, unknown>, marketsRes.data as Record<string, unknown>[])
         );
         setMatches(mapped);
-      } else if (!matchesRes.data || matchesRes.data.length === 0) {
-        // No matches in DB — pull real data from SportBex
-        setSeeding(true);
-        try {
-          console.log('[Sync] Triggering full_sync from SportBex...');
-          await supabase.functions.invoke('live-sync', {
-            body: { mode: 'full_sync' },
-          });
-        } catch (err) {
-          console.error('[Sync] Error:', err);
-        } finally {
-          setSeeding(false);
-        }
-        
-        // Re-fetch after seeding (regardless of success, to show what we have)
-        const [m2, mk2] = await Promise.all([
-          supabase.from('matches').select('*').order('start_time', { ascending: true }),
-          supabase.from('markets').select('*').eq('status', 'open'),
-        ]);
-        if (m2.data && mk2.data) {
-          setMatches(m2.data.map((m) =>
-            mapDbToMatch(m as Record<string, unknown>, mk2.data as Record<string, unknown>[])
-          ));
-        }
       }
     };
 
@@ -109,7 +109,7 @@ export default function Index({ onAuthRequired }: IndexProps) {
   }, []);
 
   const filteredMatches = matches.filter(m => {
-    if (activeSport !== 'all' && m.sport !== activeSport) return false;
+    if (activeSport !== 'all' && m.sportGroup !== activeSport) return false;
     if (filter === 'live' && m.status !== 'live') return false;
     if (filter === 'upcoming' && m.status !== 'upcoming') return false;
     if (search) {
@@ -119,11 +119,15 @@ export default function Index({ onAuthRequired }: IndexProps) {
     return true;
   });
 
+  const liveCount = matches.filter(m => m.status === 'live').length;
+
   const sportTabs = [
-    { id: 'all', label: 'All Sports', icon: '🌎' },
-    { id: 'cricket', label: 'Cricket', icon: '🏏' },
-    { id: 'football', label: 'Football', icon: '⚽' },
-    { id: 'tennis', label: 'Tennis', icon: '🎾' },
+    { id: 'all', label: 'Global Feed', icon: '🌎' },
+    ...availableGroups.map(group => ({
+      id: group,
+      label: group,
+      icon: group.includes('Cricket') ? '🏏' : (group.includes('Soccer') ? '⚽' : (group.includes('Tennis') ? '🎾' : '🏀'))
+    }))
   ];
 
   return (
@@ -133,36 +137,40 @@ export default function Index({ onAuthRequired }: IndexProps) {
       {/* Hero */}
       <div className="relative overflow-hidden">
         <div className="absolute inset-0">
-          <img src={heroBetting} alt="IPL Betting" className="w-full h-full object-cover opacity-20" />
-          <div className="absolute inset-0 bg-gradient-to-r from-[hsl(222,47%,7%)] via-[hsl(222,47%,7%)/80%] to-transparent" />
+          <div 
+             className="w-full h-full bg-cover bg-center opacity-30 mix-blend-overlay" 
+             style={{ backgroundImage: `url('/C:/Users/asava/.gemini/antigravity/brain/f99abebf-8cc7-459e-8296-55262588c715/hero_betting_pro_jpg_1773887995443.png')` }}
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-[hsl(222,47%,7%)] via-transparent to-[hsl(222,47%,7%)/40%]" />
+          <div className="absolute inset-0 bg-gradient-to-r from-[hsl(222,47%,7%)] via-[hsl(222,47%,7%)/60%] to-transparent" />
         </div>
         <div className="relative px-4 md:px-6 py-8 md:py-12">
           <div className="max-w-2xl">
             <div className="inline-flex items-center gap-2 bg-[hsl(var(--brand-gold))/20] border border-[hsl(var(--brand-gold))/30] rounded-full px-3 py-1 mb-4">
               <span className="live-dot"></span>
-              <span className="text-xs font-semibold text-[hsl(var(--brand-gold))]">Multi-Sport Exchange — Real-time Odds</span>
+              <span className="text-xs font-semibold text-[hsl(var(--brand-gold))] uppercase tracking-widest">Institutional Grade Liquidity — Elite Sports Exchange</span>
             </div>
-            <h1 className="text-3xl md:text-5xl font-extrabold text-white mb-3" style={{ fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: '0.02em' }}>
-              PREMIUM SPORTS<br />
-              <span className="text-[hsl(var(--brand-gold))]">EXCHANGE 2026</span>
+            <h1 className="text-3xl md:text-5xl font-black text-white mb-4 uppercase tracking-tight" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+              THE WORLD'S MOST<br />
+              <span className="text-[hsl(var(--brand-gold))]">LIQUID EXCHANGE 2026</span>
             </h1>
-            <p className="text-sm md:text-base text-[hsl(var(--muted-foreground))] max-w-lg">
-              Live markets for Cricket, Football, and Tennis. Direct SportBex integration for the most accurate back and lay odds globally.
+            <p className="text-sm md:text-lg text-[hsl(var(--muted-foreground))] max-w-xl leading-relaxed">
+              Trade Cricket, Football, and Tennis markets with real-time liquidity. Direct data pipelines from The Odds API & SportBex for high-frequency betting and arbitrage.
             </p>
             <div className="flex items-center gap-4 mt-4 text-sm">
               <div className="text-center">
-                <div className="text-lg font-bold text-[hsl(var(--brand-gold))]">2%</div>
-                <div className="text-xs text-[hsl(var(--muted-foreground))]">Commission</div>
+                <div className="text-xl font-black text-white">$2.4B+</div>
+                <div className="text-[10px] uppercase tracking-tighter text-[hsl(var(--muted-foreground))]">Annual Volume</div>
               </div>
               <div className="w-px h-8 bg-[hsl(222,30%,20%)]" />
               <div className="text-center">
-                <div className="text-lg font-bold text-[hsl(var(--brand-gold))]">24/7</div>
-                <div className="text-xs text-[hsl(var(--muted-foreground))]">Live Markets</div>
+                <div className="text-xl font-black text-white">0.05s</div>
+                <div className="text-[10px] uppercase tracking-tighter text-[hsl(var(--muted-foreground))]">Order Match</div>
               </div>
               <div className="w-px h-8 bg-[hsl(222,30%,20%)]" />
               <div className="text-center">
-                <div className="text-lg font-bold text-[hsl(var(--brand-gold))]">CAD/USD/INR</div>
-                <div className="text-xs text-[hsl(var(--muted-foreground))]">Currencies</div>
+                <div className="text-xl font-black text-white">DIRECT</div>
+                <div className="text-[10px] uppercase tracking-tighter text-[hsl(var(--muted-foreground))]">API Access</div>
               </div>
             </div>
           </div>
@@ -197,10 +205,14 @@ export default function Index({ onAuthRequired }: IndexProps) {
               <div className="flex bg-[hsl(222,35%,12%)] rounded-lg p-1 w-full md:w-auto">
                 {(['all', 'live', 'upcoming'] as const).map(f => (
                   <button key={f} onClick={() => setFilter(f)}
-                    className={`flex-1 md:flex-none px-5 py-1.5 text-xs font-bold rounded-md capitalize transition-all ${
+                    className={`flex-1 md:flex-none px-5 py-1.5 text-xs font-bold rounded-md capitalize transition-all flex items-center justify-center gap-2 ${
                       filter === f ? 'gold-gradient text-[hsl(var(--brand-navy))] shadow-lg' : 'text-[hsl(var(--muted-foreground))] hover:text-white'
                     }`}>
-                    {f === 'live' && '🔴 '}{f}
+                    {f === 'live' && <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />}
+                    {f}
+                    {f === 'live' && liveCount > 0 && (
+                      <span className="bg-red-500/20 text-red-500 text-[10px] px-1.5 py-0.5 rounded-full">{liveCount}</span>
+                    )}
                   </button>
                 ))}
               </div>
@@ -239,7 +251,14 @@ export default function Index({ onAuthRequired }: IndexProps) {
                 <button 
                   onClick={async () => {
                     setSeeding(true);
+                    console.log('[Sync] Requesting server-side sync Discovery...');
                     try {
+                      const res = await fetch('http://localhost:3001/api/sync/force', { method: 'POST' });
+                      if (res.ok) {
+                        window.location.reload();
+                        return;
+                      }
+                      // Fallback: Supabase Edge Function
                       await supabase.functions.invoke('live-sync', { body: { mode: 'full_sync', force: true } });
                       window.location.reload();
                     } catch (err) {

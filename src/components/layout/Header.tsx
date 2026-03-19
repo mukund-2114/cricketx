@@ -18,11 +18,12 @@ export default function Header({ user, onMenuToggle, onAuthClick, onSignOut }: H
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
   const navLinks = [
-    { label: 'Cricket', path: '/', icon: '🏏' },
+    { label: 'Sports', path: '/', icon: '🌎' },
     { label: 'Live', path: '/live', icon: '🔴' },
-    { label: 'IPL 2026', path: '/?series=ipl', icon: '🏆' },
+    { label: 'IPL', path: '/?series=ipl', icon: '🏏' },
+    { label: 'NBA', path: '/?series=nba', icon: '🏀' },
+    { label: 'EPL', path: '/?series=epl', icon: '⚽' },
     { label: 'Casino', path: '/casino', icon: '🎰' },
-    { label: 'Promotions', path: '/promotions', icon: '🎁' },
   ];
 
   return (
@@ -39,7 +40,7 @@ export default function Header({ user, onMenuToggle, onAuthClick, onSignOut }: H
               <Trophy size={16} className="text-[hsl(var(--brand-navy))]" />
             </div>
             <span className="font-bold text-lg text-white hidden sm:block" style={{ fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: '0.05em' }}>
-              CRICKET<span className="text-[hsl(var(--brand-gold))]">X</span>
+              ELITE<span className="text-[hsl(var(--brand-gold))]">EXCHANGE</span>
             </span>
           </button>
         </div>

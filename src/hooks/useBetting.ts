@@ -60,78 +60,53 @@ export function useBetting(user: User | null, onBalanceUpdate: (b: number) => vo
 
     setIsPlacing(true);
 
-    // Fetch latest profile balance to avoid race conditions
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('points_balance')
-      .eq('id', user.id)
-      .single();
+    try {
+      for (const item of betSlip) {
+        if (!item.stake || item.stake <= 0) {
+          toast.error(`Enter a stake for ${item.runnerName}`);
+          setIsPlacing(false);
+          return;
+        }
 
-    const currentBalance = profile ? Number(profile.points_balance) : user.pointsBalance;
+        const betData = {
+          user_id: user.id,
+          market_id: item.marketId,
+          match_id: item.matchId,
+          match_name: item.matchName,
+          market_name: item.marketName,
+          runner_name: item.runnerName,
+          runner_id: item.runnerId,
+          bet_type: item.betType,
+          requested_odds: item.odds,
+          matched_odds: item.odds,
+          stake: item.stake,
+          potential_pnl: calcPotentialWin(item.stake, item.odds, item.betType),
+          status: 'matched',
+        };
 
-    if (totalStake > currentBalance) {
-      toast.error('Insufficient balance');
+        const response = await fetch('http://localhost:3001/api/bets/place', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: user.id, betData }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to place bet');
+        }
+
+        const result = await response.json();
+        onBalanceUpdate(result.newBalance);
+      }
+
+      setBetSlip([]);
+      toast.success(`${betSlip.length} bet${betSlip.length > 1 ? 's' : ''} placed successfully! 🏏`);
+    } catch (err: any) {
+      console.error('Bet placement error:', err);
+      toast.error(err.message || 'Failed to place bets. Please try again.');
+    } finally {
       setIsPlacing(false);
-      return;
     }
-
-    let newBalance = currentBalance;
-
-    // Insert all bets
-    const betsToInsert = betSlip.map(item => ({
-      user_id: user.id,
-      market_id: item.marketId,
-      match_id: item.matchId,
-      match_name: item.matchName,
-      market_name: item.marketName,
-      runner_name: item.runnerName,
-      runner_id: item.runnerId,
-      bet_type: item.betType,
-      requested_odds: item.odds,
-      matched_odds: item.odds,
-      stake: item.stake,
-      potential_pnl: calcPotentialWin(item.stake, item.odds, item.betType),
-      status: 'matched',
-    }));
-
-    const { error: betsError } = await supabase.from('bets').insert(betsToInsert);
-
-    if (betsError) {
-      console.error('Bets insert error:', betsError);
-      toast.error('Failed to place bets. Please try again.');
-      setIsPlacing(false);
-      return;
-    }
-
-    // Insert transactions & update balance
-    for (const item of betSlip) {
-      newBalance -= item.stake;
-      await supabase.from('transactions').insert({
-        user_id: user.id,
-        type: 'bet_placed',
-        points: -item.stake,
-        description: `${item.betType === 'back' ? 'Back' : 'Lay'} ${item.runnerName} @ ${item.odds} — ${item.marketName}`,
-        balance_after: newBalance,
-      });
-    }
-
-    // Apply 2% commission on potential winnings (deducted from potential_pnl display — industry standard)
-    console.log(`Commission rate: ${PLATFORM_COMMISSION * 100}%`);
-
-    // Update profile balance
-    const { error: balanceError } = await supabase
-      .from('profiles')
-      .update({ points_balance: newBalance })
-      .eq('id', user.id);
-
-    if (balanceError) {
-      console.error('Balance update error:', balanceError);
-    }
-
-    onBalanceUpdate(newBalance);
-    setBetSlip([]);
-    setIsPlacing(false);
-    toast.success(`${betSlip.length} bet${betSlip.length > 1 ? 's' : ''} placed successfully! 🏏`);
   }, [user, betSlip, onBalanceUpdate]);
 
   return {

@@ -65,7 +65,10 @@ export interface Match {
   status: 'upcoming' | 'live' | 'completed';
   score?: MatchScore;
   markets: Market[];
-  sport: 'cricket' | 'football' | 'tennis';
+  sport: 'cricket' | 'football' | 'tennis' | string;
+  sportGroup?: string;
+  sportKey?: string;
+  region?: string;
 }
 
 export interface MatchScore {

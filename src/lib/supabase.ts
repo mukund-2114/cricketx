@@ -9,11 +9,11 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
-    storageKey: 'cricketx-auth-v2',
-    // Disable locking to prevent "Lock not released" hangs
-    // @ts-ignore - Supabase types might not explicitly show webLock: null but it's supported
-    lockType: null,
-  },
+    storageKey: 'cricketx-auth-singleton-final-v7',
+    // Disable WebLock API entirely to avoid "Lock broken" AbortErrors
+    lockType: 'custom',
+    getLock: () => Promise.resolve({ release: () => {} }),
+  } as any,
 });
 
 // Map Supabase auth user + profile to our User type
