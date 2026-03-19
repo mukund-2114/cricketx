@@ -3,6 +3,7 @@ const cors = require('cors');
 const matchRoutes = require('./routes/matchRoutes');
 const betRoutes = require('./routes/betRoutes');
 const authRoutes = require('./routes/authRoutes');
+const adminRoutes = require('./routes/adminRoutes');
 
 const app = express();
 
@@ -17,6 +18,7 @@ app.get('/', (req, res) => {
 app.use('/api/matches', matchRoutes);
 app.use('/api/bets', betRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

@@ -52,15 +52,18 @@ export default function AdminPage({ adminUser }: AdminPageProps) {
 
   const fetchAll = async () => {
     setLoading(true);
-    const [usersRes, betsRes, withdrawalsRes] = await Promise.all([
-      supabase.from('profiles').select('*').neq('role', 'admin').order('created_at', { ascending: false }),
-      supabase.from('bets').select('*').order('placed_at', { ascending: false }).limit(100),
-      supabase.from('withdrawals').select('*').order('requested_at', { ascending: false }),
-    ]);
-
-    if (usersRes.data) setUsers(usersRes.data.map(mapProfileToUser));
-    if (betsRes.data) setBets(betsRes.data);
-    if (withdrawalsRes.data) setWithdrawals(withdrawalsRes.data);
+    try {
+      const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+      const res = await fetch(`${backendUrl}/api/admin/system-data`);
+      const data = await res.json();
+      
+      if (data.users) setUsers(data.users.map(mapProfileToUser));
+      if (data.bets) setBets(data.bets);
+      if (data.withdrawals) setWithdrawals(data.withdrawals);
+    } catch (e) {
+      console.error('Failed to fetch admin data', e);
+      toast.error('Failed to connect to Admin API');
+    }
     setLoading(false);
   };
 
@@ -79,31 +82,42 @@ export default function AdminPage({ adminUser }: AdminPageProps) {
   ];
 
   const handleBanUser = async (userId: string, makeActive: boolean) => {
-    const { error } = await supabase.from('profiles').update({ is_active: makeActive }).eq('id', userId);
-    if (error) { toast.error('Failed to update user'); return; }
-    setUsers(prev => prev.map(u => u.id === userId ? { ...u, isActive: makeActive } : u));
-    toast.success(makeActive ? 'User activated' : 'User suspended');
+    try {
+      const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+      const res = await fetch(`${backendUrl}/api/admin/ban-user`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, makeActive })
+      });
+      if (!res.ok) throw new Error();
+      
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, isActive: makeActive } : u));
+      toast.success(makeActive ? 'User activated' : 'User suspended');
+    } catch (err) {
+      toast.error('Failed to update user');
+    }
   };
 
   const handleBalanceAdjust = async (userId: string, amount: number, note?: string) => {
     const target = users.find(u => u.id === userId);
     if (!target) return;
-    const newBalance = Math.max(0, target.pointsBalance + amount);
+    
+    try {
+      const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+      const res = await fetch(`${backendUrl}/api/admin/balance-adjust`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, amount, note, currentBalance: target.pointsBalance })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error();
 
-    const { error } = await supabase.from('profiles').update({ points_balance: newBalance }).eq('id', userId);
-    if (error) { toast.error('Failed to adjust balance'); return; }
-
-    await supabase.from('transactions').insert({
-      user_id: userId,
-      type: 'admin_adjustment',
-      points: amount,
-      description: note || `Admin balance adjustment: ${amount > 0 ? '+' : ''}${formatPoints(amount)}`,
-      balance_after: newBalance,
-    });
-
-    setUsers(prev => prev.map(u => u.id === userId ? { ...u, pointsBalance: newBalance } : u));
-    if (selectedUser?.id === userId) setSelectedUser(prev => prev ? { ...prev, pointsBalance: newBalance } : null);
-    toast.success(`Balance adjusted by ${formatPoints(amount)}`);
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, pointsBalance: data.newBalance } : u));
+      if (selectedUser?.id === userId) setSelectedUser(prev => prev ? { ...prev, pointsBalance: data.newBalance } : null);
+      toast.success(`Balance adjusted by ${formatPoints(amount)}`);
+    } catch (err) {
+      toast.error('Failed to adjust balance');
+    }
   };
 
   const handleCustomPoints = async (type: 'add' | 'deduct') => {
@@ -158,17 +172,22 @@ export default function AdminPage({ adminUser }: AdminPageProps) {
   const handleWithdrawal = async (id: string, approve: boolean) => {
     const wr = withdrawals.find(w => w.id === id);
     if (!wr) return;
-    const newStatus = approve ? 'approved' : 'rejected';
+    
+    try {
+      const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+      const res = await fetch(`${backendUrl}/api/admin/withdrawal`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, approve })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error();
 
-    const { error } = await supabase
-      .from('withdrawals')
-      .update({ status: newStatus, processed_at: new Date().toISOString() })
-      .eq('id', id);
-
-    if (error) { toast.error('Failed to process withdrawal'); return; }
-
-    setWithdrawals(prev => prev.map(w => w.id === id ? { ...w, status: newStatus } : w));
-    toast.success(approve ? 'Withdrawal approved' : 'Withdrawal rejected');
+      setWithdrawals(prev => prev.map(w => w.id === id ? { ...w, status: data.status } : w));
+      toast.success(approve ? 'Withdrawal approved' : 'Withdrawal rejected');
+    } catch (err) {
+      toast.error('Failed to process withdrawal');
+    }
   };
 
   return (
