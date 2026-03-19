@@ -15,7 +15,7 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-const BACKEND_URL = 'http://localhost:3001/api';
+const BACKEND_URL = (import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/$/, '') + '/api';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   // Synchronous recovery for instant UI response

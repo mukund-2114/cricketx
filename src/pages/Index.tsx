@@ -65,7 +65,8 @@ export default function Index({ onAuthRequired }: IndexProps) {
     const fetchMatches = async () => {
       try {
         console.log('[Sync] Fetching from Express Backend...');
-        const res = await fetch('http://localhost:3001/api/matches');
+        const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+        const res = await fetch(`${backendUrl}/api/matches`);
         if (!res.ok) throw new Error('Backend offline');
         const data = await res.json();
         

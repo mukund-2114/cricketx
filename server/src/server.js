@@ -1,6 +1,7 @@
 const app = require('./app');
 const cron = require('node-cron');
 const matchController = require('./controllers/matchController');
+const mockLiveEngine = require('./services/mockLiveEngine');
 require('dotenv').config();
 
 const PORT = process.env.PORT || 3001;
@@ -16,11 +17,14 @@ cron.schedule('*/20 * * * *', async () => {
   }
 });
 
-// Run an initial sync on start
+// Run an initial sync + Mock Engine on start
 (async () => {
   console.log('[Server] Performing initial match sync...');
   try {
     await matchController.syncMatches();
+    
+    // START MOCK LIVE ENGINE: Simulates high-frequency cricket updates
+    mockLiveEngine.startMockLiveEngine();
   } catch (err) {
     console.warn('[Server] Initial sync failed, using existing DB data or will retry next cron.');
   }

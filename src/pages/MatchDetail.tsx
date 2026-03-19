@@ -33,7 +33,8 @@ export default function MatchDetail({ onAuthRequired }: MatchDetailProps) {
     if (!id) return;
     try {
       setLoadingMatch(true);
-      const res = await fetch(`http://localhost:3001/api/matches/${id}`);
+      const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+      const res = await fetch(`${backendUrl}/api/matches/${id}`);
       if (!res.ok) throw new Error('Match not found');
       const data = await res.json();
       
@@ -88,7 +89,8 @@ export default function MatchDetail({ onAuthRequired }: MatchDetailProps) {
           <button
             onClick={() => {
               setSeeding(true);
-              fetch('http://localhost:3001/api/sync/force', { method: 'POST' })
+              const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+              fetch(`${backendUrl}/api/sync/force`, { method: 'POST' })
                 .then(() => navigate('/'))
                 .finally(() => setSeeding(false));
             }}

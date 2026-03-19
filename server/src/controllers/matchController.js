@@ -45,12 +45,24 @@ const matchDetails = async (req, res) => {
       return res.status(404).json({ error: 'Fixture not found' });
     }
 
-    console.log(`[DeepScan] Fetching Detailed Odds for ${matchId} (Region: ${match.region})...`);
-    const marketsMapped = await oddsService.fetchOddsForMatch(match.sport_key, matchId, match.region, match.home_team, match.away_team);
+    let marketsMapped = [];
+    try {
+      console.log(`[DeepScan] Fetching Detailed Odds for ${matchId} (Region: ${match.region})...`);
+      marketsMapped = await oddsService.fetchOddsForMatch(match.sport_key, matchId, match.region, match.home_team, match.away_team);
+      
+      // CACHE SUCCESS: Store this 'previous data' in case next fetch fails
+      if (marketsMapped && marketsMapped.length > 0) {
+        MatchModel.saveMarketsToMemory(matchId, marketsMapped);
+      }
+    } catch (oddsErr) {
+      console.warn(`[MatchController] Odds fetch failed for ${matchId}, checking 'previous data' cache...`, oddsErr.message);
+      marketsMapped = MatchModel.getMarketsFromMemory(matchId);
+    }
     
-    res.json({ ...match, markets: marketsMapped });
+    res.json({ ...match, markets: marketsMapped || [] });
   } catch (err) {
-    res.status(500).json({ error: 'Failed' });
+    console.error('[MatchController] Match details lookup failed:', err.message);
+    res.status(500).json({ error: 'Internal server error' });
   }
 };
 

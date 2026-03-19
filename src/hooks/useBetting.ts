@@ -84,7 +84,8 @@ export function useBetting(user: User | null, onBalanceUpdate: (b: number) => vo
           status: 'matched',
         };
 
-        const response = await fetch('http://localhost:3001/api/bets/place', {
+        const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+        const response = await fetch(`${backendUrl}/api/bets/place`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId: user.id, betData }),

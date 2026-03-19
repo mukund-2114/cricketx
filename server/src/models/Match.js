@@ -1,6 +1,17 @@
 const supabase = require('../config/supabase');
 
 let MEMORY_MATCHES = [];
+let MEMORY_MARKETS = {}; // { matchId: [markets] }
+
+const saveMarketsToMemory = (matchId, markets) => {
+  if (markets && markets.length > 0) {
+    MEMORY_MARKETS[matchId] = markets;
+  }
+};
+
+const getMarketsFromMemory = (matchId) => {
+  return MEMORY_MARKETS[matchId] || [];
+};
 
 const upsertMatches = async (matches, dbMatches = matches) => {
   // Always update memory with full data for frontend
@@ -67,5 +78,7 @@ const getMatchById = async (id) => {
 module.exports = {
   upsertMatches,
   getMatches,
-  getMatchById
+  getMatchById,
+  saveMarketsToMemory,
+  getMarketsFromMemory
 };
